@@ -49,7 +49,8 @@ Showreel does not bundle or download it. `hermes showreel status` tells you what
 | In a session | `/showreel cut [seconds] [16:9\|9:16\|1:1] [title…]` renders the current session |
 | | `/showreel list`, `/showreel status`, `/showreel demo`, `/showreel purge [id]` |
 | Ask the agent | "make a 30 second vertical demo video of what we just did" (it calls the `showreel_render` tool) |
-| Terminal | `hermes showreel list \| render [id] \| demo \| status \| purge` |
+| | `/showreel plan [seconds]` previews the beats and the exact narration text, renders nothing |
+| Terminal | `hermes showreel list \| render [id] \| plan [id] \| demo \| status \| purge` |
 
 Each render writes `<name>.mp4`, `<name>.srt`, `<name>.png` (poster) and `<name>.json` (the
 storyboard). They go to `<HERMES_HOME>/plugin-data/showreel/renders/` unless you set
@@ -75,6 +76,19 @@ with `agent.secret_scope.get_secret` at the moment of the request and only sends
 `https://api.elevenlabs.io`. It never logs, prints or stores the key. If ElevenLabs fails,
 Showreel falls back to the local voice, then to captions only. In cron and other unattended runs
 ElevenLabs is skipped unless you turn on `paid_narration_unattended`.
+
+**Planned before any audio exists.** Showreel estimates how long each line takes to say (words at
+the voice's speaking rate, plus pauses) before it synthesizes anything. Lines that would overrun
+their beat are cut to their first clause; beats with speech borrow time from beats that have
+spare; and if the video would still run past the length you asked for, the least important middle
+beats go silent (their caption stays). The title is folded into "You asked: …", and the ask and
+the result are always spoken. Silent beats are never synthesized, so a paid voice is never billed
+for audio that gets thrown away. To see exactly what would be sent, and how many characters,
+without generating anything:
+
+```
+hermes showreel plan --length 45 --narration elevenlabs     # no audio, no video, no network
+```
 
 ## Settings
 

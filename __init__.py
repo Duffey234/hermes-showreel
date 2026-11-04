@@ -51,6 +51,7 @@ USAGE = (
     "       /showreel list                 recorded sessions\n"
     "       /showreel status               capture, narration and ffmpeg status\n"
     "       /showreel demo [seconds] [aspect]  render the built-in sample session\n"
+    "       /showreel plan [seconds]       preview beats and narration text (no audio, no video)\n"
     "       /showreel purge [session_id]   delete recordings (all, or one)")
 
 
@@ -125,6 +126,23 @@ class Showreel:
             pass
         return res
 
+    def plan_session(self, session_id: str = "", *, length: Optional[float] = None, title: Optional[str] = None,
+                     narration: Optional[str] = None, demo: bool = False) -> dict:
+        if demo:
+            from .sample import record_sample
+            session_id = record_sample(capture.Recorder(self.store))
+        sid = session_id or self.store.latest_session_id()
+        session = self.store.get_session(sid) if sid else None
+        if not session or not session["events"]:
+            return {"success": False, "error": "No recorded session to plan."}
+        try:
+            res = cut.preview(session, length_s=float(length or self.cfg("default_length", 45)),
+                              narrator=self.narrator(narration), title=title)
+        except (render.RenderError, tts.TTSError) as exc:
+            return {"success": False, "error": str(exc)}
+        res["session_id"] = sid
+        return res
+
     def render_demo(self, *, length: Optional[float] = None, aspect: Optional[str] = None,
                     narration: Optional[str] = None) -> dict:
         from .sample import record_sample
@@ -181,6 +199,9 @@ class Showreel:
         if sub == "purge":
             n = self.store.purge(rest[0] if rest else None)
             return f"Deleted {n} recorded session(s). Rendered videos were kept."
+        if sub == "plan":
+            length = next((float(p.rstrip("s")) for p in rest if p.rstrip("s").isdigit()), None)
+            return format_plan(self.plan_session(str(kw.get("session_id") or ""), length=length))
         if sub in ("cut", "demo"):
             length, aspect, title_words = None, None, []
             for p in rest:
@@ -217,6 +238,22 @@ def format_result(res: dict) -> str:
     return "\n".join(lines)
 
 
+def format_plan(res: dict) -> str:
+    if not res.get("success"):
+        return f"Showreel: {res.get('error', 'failed')}"
+    p = res["plan"]
+    lines = [f"Showreel plan: \"{res['title']}\" · {res['duration_s']}s of beats · target {p['target_s']}s · "
+             f"narration: {res['narration']}"]
+    for b in res["beats"]:
+        say = f'  say: "{b["say"]}"' if b["say"] else "  (silent)"
+        lines.append(f"{b['start']:6.1f}s {b['kind']:<8} {b['caption'][:70]}{say}")
+    lines.append(f"~{p['estimated_speech_s']}s of speech, ~{p['estimated_duration_s']}s video, {p['characters']} characters"
+                 + (f", {p['muted']} beat(s) silent to fit" if p["muted"] else "")
+                 + (". Captions only: nothing would be spoken." if res["narration"].startswith("captions only")
+                    else ". Nothing was synthesized."))
+    return "\n".join(lines)
+
+
 # ── CLI: hermes showreel ... ─────────────────────────────────────────────────────────────────
 def _cli_setup(app_getter):
     def setup(subparser):
@@ -233,6 +270,14 @@ def _cli_setup(app_getter):
         d.add_argument("--length", type=float, default=None)
         d.add_argument("--aspect", choices=list(ASPECTS), default=None)
         d.add_argument("--narration", choices=list(tts.ENGINES), default=None)
+        pl = subs.add_parser("plan", help="Preview beats and the narration text; no audio, no video, no network")
+        pl.add_argument("session_id", nargs="?", default="")
+        pl.add_argument("--length", type=float, default=None)
+        pl.add_argument("--title", default=None)
+        pl.add_argument("--narration", choices=list(tts.ENGINES), default=None,
+                        help="Engine whose speaking rate to plan for (nothing is synthesized)")
+        pl.add_argument("--demo", action="store_true", help="Plan the built-in sample session")
+        pl.add_argument("--json", action="store_true")
         p = subs.add_parser("purge", help="Delete recordings (videos are kept)")
         p.add_argument("session_id", nargs="?", default=None)
         subparser.set_defaults(func=lambda a: _cli_run(app_getter(), a))
@@ -250,6 +295,10 @@ def _cli_run(app: Showreel, args) -> int:
                                                title=args.title, narration=args.narration)))
     elif sub == "demo":
         print(format_result(app.render_demo(length=args.length, aspect=args.aspect, narration=args.narration)))
+    elif sub == "plan":
+        res = app.plan_session(args.session_id, length=args.length, title=args.title, narration=args.narration,
+                               demo=args.demo)
+        print(json.dumps(res, indent=2, default=str) if args.json else format_plan(res))
     elif sub == "purge":
         print(f"Deleted {app.store.purge(args.session_id)} recorded session(s).")
     else:

@@ -15,6 +15,7 @@ A key is never logged, printed, stored, or written into any file Showreel produc
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import urllib.error
@@ -34,6 +35,21 @@ MAX_CHARS = 400
 
 class TTSError(RuntimeError):
     pass
+
+
+# Speaking rates used to plan narration before any audio exists (words per minute).
+WPM = {"local": 165.0, "elevenlabs": 150.0, "hermes": 155.0, "off": 160.0}
+
+
+def estimate_seconds(text: str, wpm: float = 160.0) -> float:
+    """Rough spoken length of *text*: words at *wpm*, plus a short pause per sentence or clause
+    break, plus extra time for long tokens (numbers, paths) that are read out letter by letter."""
+    words = re.findall(r"[A-Za-z0-9']+", text or "")
+    if not words:
+        return 0.0
+    units = sum(1.0 + max(0, len(w) - 9) / 6.0 for w in words)
+    pauses = len(re.findall(r"[.!?]+(?:\s|$)", text)) * 0.30 + len(re.findall(r"[,;:]\s", text)) * 0.15
+    return round(units * 60.0 / max(60.0, wpm) + pauses, 2)
 
 
 def _get_secret(name: str) -> Optional[str]:
@@ -104,6 +120,13 @@ class Narrator:
         if self.engine == "elevenlabs":
             return "ElevenLabs (your key)"
         return "Hermes text_to_speech"
+
+    @property
+    def wpm(self) -> float:
+        return WPM.get(self.engine, 160.0)
+
+    def estimate(self, text: str) -> float:
+        return estimate_seconds(text, self.wpm)
 
     # ── synthesis ──────────────────────────────────────────────────────────────────────────
     def say(self, text: str, out_base: Path) -> Optional[Path]:
