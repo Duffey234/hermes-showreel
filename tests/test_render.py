@@ -18,7 +18,7 @@ def probe(path):
 
 
 @needs_ffmpeg
-@pytest.mark.parametrize("aspect,size", [("16:9", (1280, 720)), ("9:16", (720, 1280))])
+@pytest.mark.parametrize("aspect,size", [("16:9", (1920, 1080)), ("9:16", (1080, 1920))])
 def test_demo_renders_mp4_captions_and_poster(app, aspect, size):
     res = app.render_demo(length=12, aspect=aspect)
     assert res["success"], res

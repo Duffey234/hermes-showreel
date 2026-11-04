@@ -209,9 +209,9 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
 
 
 def _stats_caption(s: dict) -> str:
-    parts = [f"{s['tool_calls']} tool calls"]
+    parts = [f"{s['tool_calls']} tool call{'' if s['tool_calls'] == 1 else 's'}"]
     if s["files_edited"]:
-        parts.append(f"{s['files_edited']} files edited")
+        parts.append(f"{s['files_edited']} file{'' if s['files_edited'] == 1 else 's'} edited")
     mins = s["wall_seconds"] / 60.0
     if mins >= 1:
         parts.append(f"{mins:.0f} min")

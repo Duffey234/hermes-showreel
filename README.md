@@ -95,7 +95,8 @@ hermes showreel plan --length 45 --narration elevenlabs     # no audio, no video
 Set these under `plugins.entries.showreel.settings`. Every one also appears on the Desktop
 Settings page.
 
-`capture` (true), `default_length` (45), `default_aspect` (16:9), `theme` (midnight|daylight),
+`capture` (true), `default_length` (45), `default_aspect` (16:9), `resolution` (1080p|720p),
+`theme` (midnight|daylight),
 `narration` (off), `elevenlabs_voice_id`, `elevenlabs_model`, `paid_narration_unattended`
 (false), `local_voice` (en-us), `piper_model`, `redact_emails` (true), `keep_sessions` (30),
 `output_dir`, `ffmpeg_path`.

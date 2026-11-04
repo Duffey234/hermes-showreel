@@ -116,7 +116,8 @@ class Showreel:
         try:
             res = cut.cut(session, self.out_dir(), length_s=length, aspect=aspect,
                           theme=str(self.cfg("theme", "midnight")), narrator=self.narrator(narration),
-                          title=title, ffmpeg=str(self.cfg("ffmpeg_path", "") or ""))
+                          title=title, ffmpeg=str(self.cfg("ffmpeg_path", "") or ""),
+                          resolution=str(self.cfg("resolution", "1080p") or "1080p"))
         except (render.RenderError, tts.TTSError) as exc:
             return {"success": False, "error": str(exc)}
         res["session_id"] = sid

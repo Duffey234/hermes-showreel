@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -21,6 +22,11 @@ from . import redact
 
 FPS = 30
 SIZES = {"16:9": (1280, 720), "9:16": (720, 1280), "1:1": (1080, 1080)}
+SIZES_1080 = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080)}
+RESOLUTIONS = ("1080p", "720p")
+# Beats whose card already shows the caption text in full: no second copy in the caption bar
+# (the .srt still carries every caption).
+NO_CAPTION_BAR = ("title", "ask", "result", "outro", "stats")
 FADE_FRAMES = 7
 
 THEMES = {
@@ -96,6 +102,15 @@ def S(text: Any) -> str:
     return redact.scrub(text)[0]
 
 
+def caption_text(text: Any) -> str:
+    """A caption as shown on screen and in the .srt: scrubbed, no markdown ticks."""
+    return re.sub(r"\s{2,}", " ", S(text).replace("`", "")).strip()
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
 def ease(t: float) -> float:
     t = max(0.0, min(1.0, t))
     return 1 - (1 - t) ** 3
@@ -140,11 +155,11 @@ def clip_line(draw: ImageDraw.ImageDraw, text: str, fnt, width: int) -> str:
 
 
 class Renderer:
-    def __init__(self, aspect: str = "16:9", theme: str = "midnight", ffmpeg: str = ""):
+    def __init__(self, aspect: str = "16:9", theme: str = "midnight", ffmpeg: str = "", resolution: str = "1080p"):
         if aspect not in SIZES:
             raise RenderError(f"aspect must be one of {', '.join(SIZES)}")
         self.aspect = aspect
-        self.W, self.H = SIZES[aspect]
+        self.W, self.H = (SIZES_1080 if resolution != "720p" else SIZES)[aspect]
         self.c = THEMES.get(theme, THEMES["midnight"])
         self.ffmpeg = find_ffmpeg(ffmpeg)
         self.u = min(self.W, self.H) / 720.0  # unit scale
@@ -174,8 +189,9 @@ class Renderer:
         c, pad = self.c, self.s(34)
         d.ellipse((pad, pad + self.s(6), pad + self.s(14), pad + self.s(20)), fill=c["bad"])
         d.text((pad + self.s(24), pad), "SHOWREEL", font=font("bold", self.s(20)), fill=c["text"])
-        right = f"{idx + 1}/{n}  ·  {label}"
         f = font("sans", self.s(18))
+        room = self.W - 2 * pad - self.s(24) - d.textlength("SHOWREEL", font=font("bold", self.s(20))) - self.s(30)
+        right = clip_line(d, f"{idx + 1}/{n}  ·  {label}", f, room)
         d.text((self.W - pad - d.textlength(right, font=f), pad + self.s(2)), right, font=f, fill=c["muted"])
 
     def _caption(self, img: Image.Image, text: str, alpha: float) -> None:
@@ -242,7 +258,7 @@ class Renderer:
         if stats.get("model"):
             chips.append(S(stats["model"]))
         if stats.get("redactions"):
-            chips.append(f"{stats['redactions']} secrets redacted")
+            chips.append(f"{plural(stats['redactions'], 'secret')} redacted")
         chips.append("rendered locally")
         self._chips(d, chips, y + self.s(72), a)
 
@@ -284,8 +300,12 @@ class Renderer:
     def _paint_result(self, img, beat, p, stats):
         self._bubble(img, "HERMES", S(beat["body"].get("text") or beat["caption"]), p, self.c["accent2"])
 
-    def _window(self, d, title: str, accent=None):
+    def _window(self, d, title: str, accent=None, inner_h: Optional[float] = None):
         x0, y0, x1, y1 = self.content_box()
+        if inner_h is not None:  # fit the window to its content and centre it in the frame
+            h = min(y1 - y0, max((y1 - y0) * 0.5, inner_h + self.s(44)))
+            y0 = y0 + ((y1 - y0) - h) / 2
+            y1 = y0 + h
         c = self.c
         self._panel(d, (x0, y0, x1, y1), fill=c["term"], outline=accent, width=3 if accent else 2)
         bar = self.s(44)
@@ -305,9 +325,17 @@ class Renderer:
         body = beat["body"]
         ok = bool(body.get("ok", True))
         accent = c["ok"] if fixed else (None if ok else c["bad"])
-        x0, y0, x1, y1 = self._window(d, "terminal", accent)
         fm = font("mono", self.s(22 if self.aspect != "9:16" else 20))
         lh = self.s(30)
+        cx0, cy0, cx1, cy1 = self.content_box()
+        full_cmd = wrap(d, "$ " + S(body.get("command") or ""), fm, cx1 - cx0 - self.s(48), max_lines=3)
+        raw_out = [l for l in S(body.get("output") or "").replace("\t", "    ").splitlines() if l.strip()]
+        if self.aspect == "9:16":
+            n_out = sum(len(wrap(d, l, fm, cx1 - cx0 - self.s(48), max_lines=3) or [l]) for l in raw_out) or 1
+        else:
+            n_out = len(raw_out) or 1
+        x0, y0, x1, y1 = self._window(d, "terminal", accent,
+                                      inner_h=self.s(18) + lh * (len(full_cmd) + n_out) + self.s(84))
         cmd = S(body.get("command") or "")
         typed = cmd[: int(len(cmd) * ease(p * 3.0))]
         lines_avail = int((y1 - y0 - self.s(40)) / lh)
@@ -319,6 +347,8 @@ class Renderer:
         if p > 0.33:
             out = S(body.get("output") or "").replace("\t", "    ").splitlines()
             out = [l for l in out if l.strip()] or ["(no output)"]
+            if self.aspect == "9:16":  # narrow frame: wrap long lines instead of clipping them
+                out = [w for l in out for w in (wrap(d, l, fm, x1 - x0 - self.s(48), max_lines=3) or [l])]
             k = max(1, int(len(out) * ease((p - 0.33) / 0.4)))
             room = max(1, lines_avail - len(cmd_lines) - 1)
             visible = out[:k][-room:]
@@ -349,10 +379,10 @@ class Renderer:
         c = self.c
         body = beat["body"]
         path = S(body.get("path") or "file")
-        x0, y0, x1, y1 = self._window(d, path)
         fm = font("mono", self.s(21 if self.aspect != "9:16" else 19))
         lh = self.s(29)
         lines = [S(l) for l in (body.get("lines") or ["(no diff captured)"])]
+        x0, y0, x1, y1 = self._window(d, path, inner_h=self.s(44) + lh * len(lines))
         room = max(1, int((y1 - y0 - self.s(30)) / lh))
         k = max(1, int(len(lines) * ease(p * 1.8)))
         visible = lines[:k][-room:]
@@ -509,7 +539,8 @@ class Renderer:
                     if prev_last is not None and f < FADE_FRAMES:
                         img = Image.blend(prev_last, img, (f + 1) / (FADE_FRAMES + 1))
                     t_global = (b["start"] + b["duration"] * p) / max(total, 0.001)
-                    self._caption(img, S(b["caption"]), ease(min(1.0, f / 8)))
+                    if b["kind"] not in NO_CAPTION_BAR:
+                        self._caption(img, caption_text(b["caption"]), ease(min(1.0, f / 8)))
                     self._progress(img, t_global)
                     proc.stdin.write(img.tobytes())
                     frames += 1
@@ -545,7 +576,8 @@ class Renderer:
         beats = board["beats"]
         b = beats[min(beat_index, len(beats) - 1)]
         img = self.paint(b, 1.0, beat_index, len(beats), board.get("stats") or {})
-        self._caption(img, S(b["caption"]), 1.0)
+        if b["kind"] not in NO_CAPTION_BAR:
+            self._caption(img, caption_text(b["caption"]), 1.0)
         img.save(out_path)
         return out_path
 
@@ -559,7 +591,7 @@ def write_srt(board: dict, path: Path) -> Path:
         return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
     out = []
     for i, b in enumerate(board["beats"], 1):
-        out.append(f"{i}\n{ts(b['start'])} --> {ts(b['start'] + b['duration'])}\n{S(b['caption'])}\n")
+        out.append(f"{i}\n{ts(b['start'])} --> {ts(b['start'] + b['duration'])}\n{caption_text(b['caption'])}\n")
     Path(path).write_text("\n".join(out), encoding="utf-8")
     return Path(path)
 

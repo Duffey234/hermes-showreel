@@ -33,6 +33,12 @@ config_schema:
     choices: ["16:9", "9:16", "1:1"]
     default: "16:9"
     label: "Default aspect ratio"
+  resolution:
+    type: str
+    choices: ["1080p", "720p"]
+    default: "1080p"
+    label: "Resolution"
+    description: "1080p (1920x1080, 1080x1920 or 1080x1080) or 720p for faster renders."
   theme:
     type: str
     choices: ["midnight", "daylight"]

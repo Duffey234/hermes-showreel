@@ -189,12 +189,13 @@ def _slug(text: str) -> str:
 
 def cut(session: dict, out_dir: Path, *, length_s: float = 45.0, aspect: str = "16:9", theme: str = "midnight",
         narrator: Optional[tts.Narrator] = None, title: Optional[str] = None, ffmpeg: str = "",
+        resolution: str = "1080p",
         progress: Optional[Callable[[str], None]] = None) -> dict:
     t_start = time.monotonic()
     board = storyboard.build(session, length_s=length_s, title=title)
     if not board["beats"]:
         raise render.RenderError("nothing to cut: the session has no recorded events")
-    rnd = render.Renderer(aspect=aspect, theme=theme, ffmpeg=ffmpeg)
+    rnd = render.Renderer(aspect=aspect, theme=theme, ffmpeg=ffmpeg, resolution=resolution)
     if not rnd.ffmpeg:
         raise render.RenderError("ffmpeg not found on PATH. Install it (apt install ffmpeg / brew install ffmpeg / "
                                  "winget install ffmpeg) or set plugins.entries.showreel.settings.ffmpeg_path.")
