@@ -1,0 +1,91 @@
+name: showreel
+version: "0.1.0"
+manifest_version: 2
+api_version: 1
+description: "Turn any Hermes session into a demo video under 90 seconds. Showreel records what the session actually did (your ask, terminal commands and output, file edits, screenshots, token usage), scrubs secrets before anything is stored or drawn, picks the key beats, and renders an MP4 with burned-in captions, an .srt and a poster, locally with Pillow and your ffmpeg. Optional narration: a free local voice, your own ElevenLabs key, or Hermes text_to_speech. Nothing is uploaded."
+author: Showreel contributors
+license: MIT
+homepage: https://github.com/Duffey234/hermes-showreel
+tags: ["video", "demo", "recap", "screen-recording", "captions", "tts", "devrel", "desktop"]
+requires_hermes: ">=0.22.7"
+provides_tools:
+  - showreel_render
+provides_hooks:
+  - on_session_start
+  - pre_llm_call
+  - post_tool_call
+  - post_api_request
+  - post_llm_call
+  - on_session_end
+config_schema:
+  capture:
+    type: bool
+    default: true
+    label: "Record sessions"
+    description: "Record each session's timeline (scrubbed) so it can be cut into a video. Stored only in this profile's plugin-data folder."
+  default_length:
+    type: int
+    default: 45
+    label: "Default length (seconds)"
+    description: "Target video length, 10 to 89 seconds."
+  default_aspect:
+    type: str
+    choices: ["16:9", "9:16", "1:1"]
+    default: "16:9"
+    label: "Default aspect ratio"
+  theme:
+    type: str
+    choices: ["midnight", "daylight"]
+    default: "midnight"
+    label: "Theme"
+  narration:
+    type: str
+    choices: ["auto", "off", "local", "elevenlabs", "hermes"]
+    default: "auto"
+    label: "Narration"
+    description: "auto = ElevenLabs if your key is set, otherwise captions only. local = free offline voice (espeak-ng or piper on PATH). hermes = Hermes text_to_speech."
+  elevenlabs_api_key:
+    type: secret
+    env: ELEVENLABS_API_KEY
+    label: "ElevenLabs API key (optional)"
+    description: "Your own key, stored by Hermes like other provider keys. Used only for narration calls to api.elevenlabs.io."
+  elevenlabs_voice_id:
+    type: str
+    default: ""
+    label: "ElevenLabs voice id"
+    description: "Leave empty for a stock voice."
+  elevenlabs_model:
+    type: str
+    default: ""
+    label: "ElevenLabs model id"
+    description: "Leave empty for eleven_turbo_v2_5."
+  paid_narration_unattended:
+    type: bool
+    default: false
+    label: "Allow ElevenLabs in cron/unattended runs"
+  local_voice:
+    type: str
+    default: "en-us"
+    label: "espeak-ng voice"
+  piper_model:
+    type: str
+    default: ""
+    label: "Piper voice model (.onnx path)"
+  redact_emails:
+    type: bool
+    default: true
+    label: "Hide email addresses"
+  keep_sessions:
+    type: int
+    default: 30
+    label: "Recorded sessions to keep"
+  output_dir:
+    type: str
+    default: ""
+    label: "Output folder"
+    description: "Empty = <HERMES_HOME>/plugin-data/showreel/renders"
+  ffmpeg_path:
+    type: str
+    default: ""
+    label: "ffmpeg executable"
+    description: "Empty = find ffmpeg on PATH."

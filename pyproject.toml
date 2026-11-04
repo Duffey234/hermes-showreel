@@ -1,0 +1,9 @@
+[project]
+name = "hermes-showreel"
+version = "0.1.0"
+description = "Showreel for Hermes Agent: turn any session into a demo video under 90 seconds."
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "Pillow>=10.4,<14",
+]

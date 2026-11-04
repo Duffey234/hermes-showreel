@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+.env
+*.mp4
+*.wav
+*.mp3
+*.srt
+*.db
+*.db-*
+renders/
