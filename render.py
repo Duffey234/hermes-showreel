@@ -107,6 +107,12 @@ def caption_text(text: Any) -> str:
     return re.sub(r"\s{2,}", " ", S(text).replace("`", "")).strip()
 
 
+def bubble_text(text: Any) -> str:
+    """Chat text as drawn in a bubble: scrubbed, markdown ticks and bold markers removed."""
+    t = S(text).replace("`", "").replace("**", "").replace("__", "")
+    return re.sub(r"[ \t]{2,}", " ", t).strip()
+
+
 def plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
@@ -295,10 +301,10 @@ class Renderer:
                          y - lh + self.s(36)), fill=color)
 
     def _paint_ask(self, img, beat, p, stats):
-        self._bubble(img, "YOU", S(beat["body"].get("text") or beat["caption"]), p, self.c["accent"])
+        self._bubble(img, "YOU", bubble_text(beat["body"].get("text") or beat["caption"]), p, self.c["accent"])
 
     def _paint_result(self, img, beat, p, stats):
-        self._bubble(img, "HERMES", S(beat["body"].get("text") or beat["caption"]), p, self.c["accent2"])
+        self._bubble(img, "HERMES", bubble_text(beat["body"].get("text") or beat["caption"]), p, self.c["accent2"])
 
     def _window(self, d, title: str, accent=None, inner_h: Optional[float] = None):
         x0, y0, x1, y1 = self.content_box()

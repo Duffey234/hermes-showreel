@@ -13,5 +13,7 @@
 - Storyboard keeps a failing command and the run that fixed it together.
 - Visual polish: 1080p default (`resolution` setting), content-fitted terminal and diff windows,
   no duplicate caption bars on cards, clean captions, plurals, wrapped output in 9:16.
+- If a voice clip runs longer than estimated, the time is won back from beats with slack, so the
+  cut still lands on the requested length. Chat bubbles drop markdown ticks and bold markers.
 - Default narration is `off`; `auto` uses only free offline voices; ElevenLabs only when chosen.
 - `/showreel`, `showreel_render` tool, `hermes showreel` CLI, built-in demo session.

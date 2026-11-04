@@ -85,3 +85,17 @@ def test_moment_edits_drop_beats_and_replace_captions(store):
     assert abs(edited["duration"] - 45) < 0.5 or all(b["duration"] >= cut.MAX_BEAT_S - 0.01 for b in edited["beats"])
     same = storyboard.build(session, length_s=45)
     assert cut.apply_edits(same, {"skip": [], "captions": {}}, 45)["duration"] == storyboard.build(session, length_s=45)["duration"]
+
+
+def test_reclaim_wins_back_time_when_the_voice_runs_long():
+    cutmod = cut
+    board = {"beats": [{"kind": k, "duration": d} for k, d in
+                       (("title", 3.0), ("ask", 7.0), ("tool", 6.0), ("outro", 3.0))]}
+    floors = [2.0, 7.0, 2.0, 2.0]  # the ask's voice clip needs all 7 s
+    won = cutmod._reclaim(board, floors, 15.0)
+    durs = [b["duration"] for b in board["beats"]]
+    assert abs(sum(durs) - 15.0) < 0.02 and abs(won - 4.0) < 0.02
+    assert durs[1] == 7.0 and all(d >= f - 1e-6 for d, f in zip(durs, floors))
+    # nothing to give: stays as is
+    board2 = {"beats": [{"kind": "ask", "duration": 5.0}]}
+    assert cutmod._reclaim(board2, [5.0], 3.0) == 0.0

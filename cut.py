@@ -83,6 +83,26 @@ def _short_line(beat: dict) -> str:
     return _clause(line)
 
 
+def _reclaim(board: dict, floors: list, target: float) -> float:
+    """Shrink beats that have slack (never below their floor) until the cut is back at ``target``.
+    Returns the seconds won back."""
+    over = sum(b["duration"] for b in board["beats"]) - float(target)
+    won = 0.0
+    while over - won > 0.01:
+        slack = [(i, b["duration"] - floors[i]) for i, b in enumerate(board["beats"])
+                 if b["duration"] - floors[i] > 0.01]
+        if not slack:
+            break
+        total = sum(x for _, x in slack)
+        take = min(over - won, total)
+        for i, x in slack:
+            cut_s = take * x / total
+            board["beats"][i]["duration"] = round(board["beats"][i]["duration"] - cut_s, 3)
+            won += cut_s
+    _retime(board)
+    return round(won, 3)
+
+
 def plan_narration(board: dict, target_s: float, estimate: Callable[[str], float]) -> dict:
     """Decide what will be spoken, and how long every beat lasts, BEFORE any audio exists.
 
@@ -255,6 +275,7 @@ def cut(session: dict, out_dir: Path, *, length_s: float = 45.0, aspect: str = "
                          f"(target {plan['target_s']} s), {plan['characters']} characters"
                          + (f", {plan['muted']} beat(s) left silent to fit" if plan["muted"] else ""))
             clips: list[tuple[int, Path]] = []
+            floors = [MIN_BEAT_S] * len(board["beats"])  # shortest each beat may become afterwards
             for i, b in enumerate(board["beats"]):
                 if not plan["lines"][i]:
                     continue
@@ -264,11 +285,14 @@ def cut(session: dict, out_dir: Path, *, length_s: float = 45.0, aspect: str = "
                         break
                     continue
                 need = render.audio_seconds(clip) + NARRATION_PAD + LEAD_IN
+                floors[i] = max(MIN_BEAT_S, need)
                 if need > b["duration"]:
                     b["duration"] = round(need, 3)
                 clips.append((i, clip))
             notes += narrator.notes
             _retime(board)
+            # The voice may run longer than estimated: win the time back from beats with slack.
+            _reclaim(board, floors, plan["target_s"])
             # Keep the hard cap: drop the weakest middle beats (and their clips) until it fits.
             while board["duration"] > storyboard.HARD_CAP_S:
                 mids = [(b["score"], i) for i, b in enumerate(board["beats"])

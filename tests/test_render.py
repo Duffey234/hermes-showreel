@@ -79,3 +79,10 @@ def test_slash_command_parsing(app, monkeypatch):
     assert seen == {"sid": "abc", "length": 30.0, "aspect": "9:16", "title": "My launch"}
     assert "Usage" in app.slash("help")
     assert "Showreel capture" in app.slash("status")
+
+
+def test_bubble_text_drops_markdown_but_still_scrubs():
+    from hermes_showreel import render
+    out = render.bubble_text("The bug in `mathutil.py` was **fixed**.")
+    assert out == "The bug in mathutil.py was fixed."
+    assert "sk-ant-" not in render.bubble_text("key sk-ant-" + "a" * 40)
