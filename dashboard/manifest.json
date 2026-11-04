@@ -1,0 +1,7 @@
+{
+  "name": "showreel",
+  "label": "Showreel",
+  "description": "Backend routes for the Showreel Desktop page: sessions, plans, renders.",
+  "tab": { "hidden": true },
+  "api": "plugin_api.py"
+}

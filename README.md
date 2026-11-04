@@ -60,6 +60,26 @@ attachment.
 Try it with no model at all: `hermes showreel demo --length 30 --aspect 9:16` renders a built-in
 sample session.
 
+## In the Desktop app
+
+Showreel ships a Desktop half in the same package (`desktop/plugin.js`, with its backend in
+`dashboard/plugin_api.py`). Like every Desktop plugin it starts off: turn it on in
+**Capabilities → Plugins → Showreel**. Then you get:
+
+* **A Showreel page** in the sidebar (and in ⌘K): your recorded sessions, and for the one you
+  pick a **moment editor**. Every beat is listed with its time; untick a beat to drop it, or edit
+  its caption, then choose the length, aspect and narration and press **Render**. The plan shows
+  the estimated length and, when a voice is on, how many characters it would speak.
+* **An inline player** for the new video and every earlier render.
+* **A REC chip** in the status bar: a pulsing dot while Showreel is recording the current
+  session, a plain "Showreel" when capture is on and idle. Click it to open the page.
+* **A player card in chat**: when the agent calls `showreel_render`, Desktop shows the video
+  with its length, narration and redaction count, plus an **Edit moments** button.
+
+The CLI and the `/showreel` command remain the core and do everything the page does; the Desktop
+half is a front end over the same code. Tested in the browser-hosted Desktop (`hermes webapp`) on
+Hermes 0.22.7.
+
 ## Narration (optional, pluggable)
 
 | `narration` | What happens | Cost |
@@ -114,6 +134,9 @@ Settings page.
 * **Network:** none by default. Only when you explicitly set `narration: elevenlabs` (setting,
   `--narration elevenlabs`, or the tool's `narration` argument) does it make HTTPS POST requests to
   `api.elevenlabs.io`, carrying the caption text of each beat. Having the key set is not enough.
+* **Desktop half:** when you enable it, its routes under `/api/plugins/showreel/` read your
+  recordings and the renders folder, render on request, and return a render (by bare file name,
+  renders folder only) as a data URL for the player. No other files are served.
 * **No telemetry**, no background processes and no self-updates. Showreel never overrides a core
   tool and never bypasses approvals: it only observes hooks and does not block or alter tool
   calls.

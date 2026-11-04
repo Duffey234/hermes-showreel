@@ -101,7 +101,8 @@ class Showreel:
 
     # ── operations ─────────────────────────────────────────────────────────────────────────
     def render_session(self, session_id: str = "", *, length: Optional[float] = None, aspect: Optional[str] = None,
-                       title: Optional[str] = None, narration: Optional[str] = None) -> dict:
+                       title: Optional[str] = None, narration: Optional[str] = None,
+                       edits: Optional[dict] = None) -> dict:
         sid = session_id or self.store.latest_session_id()
         if not sid:
             return {"success": False, "error": "No recorded session yet. Showreel records sessions while it is "
@@ -117,7 +118,7 @@ class Showreel:
             res = cut.cut(session, self.out_dir(), length_s=length, aspect=aspect,
                           theme=str(self.cfg("theme", "midnight")), narrator=self.narrator(narration),
                           title=title, ffmpeg=str(self.cfg("ffmpeg_path", "") or ""),
-                          resolution=str(self.cfg("resolution", "1080p") or "1080p"))
+                          resolution=str(self.cfg("resolution", "1080p") or "1080p"), edits=edits)
         except (render.RenderError, tts.TTSError) as exc:
             return {"success": False, "error": str(exc)}
         res["session_id"] = sid
@@ -128,7 +129,7 @@ class Showreel:
         return res
 
     def plan_session(self, session_id: str = "", *, length: Optional[float] = None, title: Optional[str] = None,
-                     narration: Optional[str] = None, demo: bool = False) -> dict:
+                     narration: Optional[str] = None, demo: bool = False, edits: Optional[dict] = None) -> dict:
         if demo:
             from .sample import record_sample
             session_id = record_sample(capture.Recorder(self.store))
@@ -138,7 +139,7 @@ class Showreel:
             return {"success": False, "error": "No recorded session to plan."}
         try:
             res = cut.preview(session, length_s=float(length or self.cfg("default_length", 45)),
-                              narrator=self.narrator(narration), title=title)
+                              narrator=self.narrator(narration), title=title, edits=edits)
         except (render.RenderError, tts.TTSError) as exc:
             return {"success": False, "error": str(exc)}
         res["session_id"] = sid
@@ -149,6 +150,62 @@ class Showreel:
         from .sample import record_sample
         sid = record_sample(capture.Recorder(self.store))  # demo always records, even with capture off
         return self.render_session(sid, length=length, aspect=aspect, narration=narration)
+
+    RECORDING_WINDOW_S = 120.0
+
+    def status_dict(self) -> dict:
+        """Machine-readable status for the Desktop half (REC chip, page header)."""
+        import time as _t
+        last = self.store.last_event()
+        capture_on = bool(self.cfg("capture", True))
+        recording = bool(capture_on and last and _t.time() - last[1] < self.RECORDING_WINDOW_S)
+        n = self.narrator()
+        return {
+            "capture": capture_on,
+            "recording": recording,
+            "recording_session": last[0] if recording and last else None,
+            "sessions": len(self.store.list_sessions(limit=1000)),
+            "ffmpeg": bool(render.find_ffmpeg(str(self.cfg("ffmpeg_path", "") or ""))),
+            "narration": str(self.cfg("narration", "off")),
+            "narration_resolved": n.describe(),
+            "offline_voice": bool(tts.local_backend(str(self.cfg("piper_model", "") or ""))),
+            "default_length": float(self.cfg("default_length", 45)),
+            "default_aspect": str(self.cfg("default_aspect", "16:9")),
+        }
+
+    def renders(self, limit: int = 30) -> list[dict]:
+        """Rendered videos, newest first, with their JSON sidecar summary."""
+        out_dir = self.out_dir()
+        if not out_dir.is_dir():
+            return []
+        rows = []
+        for mp4 in sorted(out_dir.glob("showreel-*.mp4"), key=lambda q: q.stat().st_mtime, reverse=True)[:limit]:
+            meta: dict = {}
+            side = mp4.with_suffix(".json")
+            if side.is_file():
+                try:
+                    meta = json.loads(side.read_text(encoding="utf-8")).get("result") or {}
+                except (OSError, ValueError):
+                    meta = {}
+            rows.append({"name": mp4.name, "path": str(mp4), "bytes": mp4.stat().st_size,
+                         "mtime": mp4.stat().st_mtime, "duration_s": meta.get("duration_s"),
+                         "aspect": meta.get("aspect"), "narration": meta.get("narration"),
+                         "session_id": meta.get("session_id"),
+                         "poster": mp4.with_suffix(".png").name if mp4.with_suffix(".png").is_file() else None})
+        return rows
+
+    def render_file(self, name: str) -> Optional[Path]:
+        """A file in the renders folder by bare name (no paths, no traversal)."""
+        if not name or "/" in name or "\\" in name or name.startswith(".") or not name.startswith("showreel-"):
+            return None
+        if not name.endswith((".mp4", ".png", ".srt", ".json")):
+            return None
+        f = self.out_dir() / name
+        try:
+            f.resolve().relative_to(self.out_dir().resolve())
+        except (OSError, ValueError):
+            return None
+        return f if f.is_file() else None
 
     def status(self) -> str:
         ff = render.find_ffmpeg(str(self.cfg("ffmpeg_path", "") or ""))

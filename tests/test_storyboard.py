@@ -34,3 +34,12 @@ def test_deterministic(store):
 def test_empty_session():
     b = storyboard.build({"events": []}, length_s=30)
     assert [x["kind"] for x in b["beats"]] == ["title", "stats", "outro"]
+
+
+def test_failure_and_fix_are_kept_together(store):
+    s = _session(store)
+    for L in range(25, 90, 3):  # very short cuts may keep just the fix
+        kinds = [x["kind"] for x in storyboard.build(s, length_s=L)["beats"]]
+        fails = sum(1 for x in storyboard.build(s, length_s=L)["beats"]
+                    if x["kind"] == "terminal" and "failed" in x["caption"])
+        assert (fails > 0) == ("fix" in kinds), (L, kinds)

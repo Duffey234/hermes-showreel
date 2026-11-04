@@ -139,6 +139,7 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
     middle: list[Beat] = []
     seen_tools: set[str] = set()
     last_fail_idx: dict[str, int] = {}
+    fix_pairs: list[tuple[Beat, Optional[Beat]]] = []
     for i, e in enumerate(tools):
         name = e["tool"] or "tool"
         d = e["data"]
@@ -165,10 +166,13 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
                 cap = f"Fixed. `{_short(cmd, 40)}` passes now"
                 prev = middle[last_fail_idx.pop(key)]
                 prev.score += 2.5  # the failure is part of the story
+                fix_pairs.append((prev, None))  # completed below once the fix beat exists
             else:
                 cap = f"Ran `{_short(cmd, 52)}`"
             body = {"command": cmd, "output": out, "ok": ok, "exit_code": d.get("exit_code")}
             middle.append(Beat(kind, "Terminal" if kind != "fix" else "Fixed", cap, body, score + novelty, i))
+            if kind == "fix":
+                fix_pairs[-1] = (fix_pairs[-1][0], middle[-1])
         elif name in EDIT_TOOLS:
             path = _path_of(args)
             lines = _diff_lines(args)
@@ -199,7 +203,9 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
     tail.append(Beat("stats", "By the numbers", _stats_caption(stats), {"stats": stats}, 97))
     tail.append(Beat("outro", "Showreel", "Cut by Showreel for Hermes Agent", {}, 96))
 
-    beats = _fit(fixed_head, middle, tail, target)
+    pairs = {id(a): b for a, b in fix_pairs if b is not None}
+    pairs.update({id(b): a for a, b in fix_pairs if b is not None})
+    beats = _fit(fixed_head, middle, tail, target, pairs)
     t = 0.0
     for b in beats:
         b.start = t
@@ -223,25 +229,37 @@ def _stats_caption(s: dict) -> str:
     return " · ".join(parts)
 
 
-def _fit(head: list[Beat], middle: list[Beat], tail: list[Beat], target: float) -> list[Beat]:
-    """Pick the best middle beats, keep chronological order, and scale durations into *target*."""
+SQUEEZE = 0.85  # beats may be squeezed this far below their base length to fit more of the story
+
+
+def _fit(head: list[Beat], middle: list[Beat], tail: list[Beat], target: float,
+         pairs: Optional[dict] = None) -> list[Beat]:
+    """Pick the best middle beats, keep chronological order, and scale durations into *target*.
+    A failing command and the run that fixed it are picked together or not at all."""
+    pairs = pairs or {}
     fixed = head + tail
     fixed_min = sum(MIN_BEAT[b.kind] for b in fixed)
-    budget_mid = max(0.0, target - sum(BASE[b.kind] for b in fixed))
+    budget_mid = max(0.0, target - SQUEEZE * sum(BASE[b.kind] for b in fixed))
     chosen: list[Beat] = []
+    picked: set[int] = set()
     used = 0.0
     for b in sorted(middle, key=lambda b: (-b.score, b.order)):
-        if b.score < 0.5:
+        if b.score < 0.5 or id(b) in picked:
             continue
-        cost = BASE[b.kind]
+        group = [b] + ([pairs[id(b)]] if id(b) in pairs and id(pairs[id(b)]) not in picked else [])
+        cost = SQUEEZE * sum(BASE[x.kind] for x in group)
         if used + cost <= budget_mid + 0.01:
-            chosen.append(b)
+            chosen.extend(group)
+            picked.update(id(x) for x in group)
             used += cost
     # If nothing fits at base length, keep the single best beat at its minimum.
     if not chosen and middle and target - fixed_min >= MIN_BEAT["terminal"]:
         best = max(middle, key=lambda b: b.score)
         if best.score >= 0.5:
             chosen = [best]
+            mate = pairs.get(id(best))
+            if mate is not None and target - fixed_min >= MIN_BEAT[best.kind] + MIN_BEAT[mate.kind]:
+                chosen.append(mate)
     chosen.sort(key=lambda b: b.order)
     beats = head + chosen + tail
     for b in beats:

@@ -164,6 +164,12 @@ class Store:
                 "redactions", "tool_calls")
         return [dict(zip(keys, r)) for r in rows]
 
+    def last_event(self) -> Optional[tuple[str, float]]:
+        """(session_id, ts) of the newest recorded event, or None."""
+        with self._lock:
+            row = self._db().execute("SELECT session_id, ts FROM events ORDER BY id DESC LIMIT 1").fetchone()
+        return (row[0], float(row[1])) if row else None
+
     def latest_session_id(self, *, with_tools: bool = True) -> Optional[str]:
         for s in self.list_sessions(limit=50):
             if not with_tools or s["tool_calls"]:

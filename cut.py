@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import render, storyboard, tts
+from . import redact, render, storyboard, tts
 
 NARRATION_PAD = 0.45  # seconds of air after each spoken line
 
@@ -33,9 +33,10 @@ def _spoken(text: str) -> str:
     t = re.sub(r"\s+[\u00b7|]\s+", ", ", t)
     t = re.sub(r"\s{2,}", " ", t).strip()
     if t.endswith(("\u2026", "...")):  # a truncated caption: stop at the last clause that is whole
-        cut_at = max(t.rfind(c) for c in ".;,!?")
-        t = t[:cut_at].rstrip(" ,;") + "." if cut_at > 10 else t.rstrip("\u2026. ")
-    return t[:1].upper() + t[1:] if t else t
+        marks = [m.start() for m in re.finditer(r"[.;,:!?](?=\s)", t)]
+        cut_at = marks[-1] if marks else -1
+        t = t[:cut_at].rstrip(" ,;:") + "." if cut_at > 10 else t.rstrip("\u2026. ")
+    return t
 
 
 def _narration_line(beat: dict) -> str:
@@ -61,7 +62,7 @@ MIN_BEAT_S = 2.0  # a beat is never squeezed below this when making room for spe
 def _clause(text: str) -> str:
     """A shorter version of *text*: its first sentence of 3+ words, cut at the first clause break."""
     head = _sentences(text, 3)
-    parts = re.split(r"[,;:]\s+|\s+[-\u2013\u2014]\s+", head)
+    parts = re.split(r"[,;:](?=\s)\s*|\s+[-\u2013\u2014]\s+", head)
     out = ""
     for p in parts:
         out = f"{out}, {p}" if out else p
@@ -149,13 +150,45 @@ def plan_narration(board: dict, target_s: float, estimate: Callable[[str], float
     }
 
 
+MAX_BEAT_S = 12.0
+
+
+def apply_edits(board: dict, edits: Optional[dict], length_s: float) -> dict:
+    """The moment editor: drop beats (``skip``: indexes) and replace captions (``captions``:
+    {index: text}), then stretch what is left back toward the requested length. The title and the
+    outro cannot be dropped. Edited captions are scrubbed like everything else."""
+    if not edits or not (edits.get("skip") or edits.get("captions")):
+        return board
+    beats = board["beats"]
+    skip = {int(i) for i in (edits.get("skip") or []) if str(i).lstrip("-").isdigit()}
+    caps = {int(k): str(v) for k, v in (edits.get("captions") or {}).items() if str(k).lstrip("-").isdigit()}
+    kept = []
+    for i, b in enumerate(beats):
+        if i in skip and b["kind"] not in ("title", "outro"):
+            continue
+        if i in caps and caps[i].strip():
+            b["caption"] = redact.scrub(caps[i].strip()[:300])[0]
+            b.setdefault("edited", True)
+        kept.append(b)
+    board["beats"] = kept
+    target = min(max(float(length_s or 0.0), storyboard.MIN_LEN_S), storyboard.HARD_CAP_S)
+    total = sum(b["duration"] for b in kept)
+    if kept and total < target:
+        k = target / total
+        for b in kept:
+            b["duration"] = round(min(MAX_BEAT_S, b["duration"] * k), 3)
+    _retime(board)
+    return board
+
+
 def preview(session: dict, *, length_s: float = 45.0, narrator: Optional[tts.Narrator] = None,
-            title: Optional[str] = None) -> dict:
+            title: Optional[str] = None, edits: Optional[dict] = None) -> dict:
     """Storyboard plus narration plan, with no audio and no video. Free: nothing is synthesized,
     so this is how to see the exact text (and character count) a paid voice would receive."""
     board = storyboard.build(session, length_s=length_s, title=title)
     if not board["beats"]:
         raise render.RenderError("nothing to cut: the session has no recorded events")
+    apply_edits(board, edits, length_s)
     n = narrator or tts.Narrator("off")
     plan = plan_narration(board, length_s, n.estimate)
     if n.engine != "off":
@@ -189,12 +222,13 @@ def _slug(text: str) -> str:
 
 def cut(session: dict, out_dir: Path, *, length_s: float = 45.0, aspect: str = "16:9", theme: str = "midnight",
         narrator: Optional[tts.Narrator] = None, title: Optional[str] = None, ffmpeg: str = "",
-        resolution: str = "1080p",
+        resolution: str = "1080p", edits: Optional[dict] = None,
         progress: Optional[Callable[[str], None]] = None) -> dict:
     t_start = time.monotonic()
     board = storyboard.build(session, length_s=length_s, title=title)
     if not board["beats"]:
         raise render.RenderError("nothing to cut: the session has no recorded events")
+    apply_edits(board, edits, length_s)
     rnd = render.Renderer(aspect=aspect, theme=theme, ffmpeg=ffmpeg, resolution=resolution)
     if not rnd.ffmpeg:
         raise render.RenderError("ffmpeg not found on PATH. Install it (apt install ffmpeg / brew install ffmpeg / "
@@ -276,6 +310,8 @@ def cut(session: dict, out_dir: Path, *, length_s: float = 45.0, aspect: str = "
         "frames": info["frames"],
         "notes": notes,
     }
+    if session.get("session_id"):
+        result["session_id"] = session["session_id"]
     if plan:
         result["narration_plan"] = {k: v for k, v in plan.items() if k not in ("lines", "durations")}
     if narrator is not None and narrator.chars_sent:

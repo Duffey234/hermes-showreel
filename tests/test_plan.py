@@ -69,3 +69,19 @@ def test_preview_synthesizes_nothing(store):
     res = cut.preview(session, length_s=30, narrator=n)
     assert res["success"] and res["plan"]["characters"] > 0 and calls == [] and n.chars_sent == 0
     assert abs(sum(b["duration"] for b in res["beats"]) - res["plan"]["estimated_duration_s"]) < 0.2
+
+
+def test_moment_edits_drop_beats_and_replace_captions(store):
+    session = store.get_session(record_sample(Recorder(store)))
+    board = storyboard.build(session, length_s=45)
+    kinds = [b["kind"] for b in board["beats"]]
+    i_tool, i_title = kinds.index("tool"), kinds.index("title")
+    i_ask = kinds.index("ask")
+    edited = cut.apply_edits(board, {"skip": [i_tool, i_title], "captions": {str(i_ask): "Make it wrap. key=sk-" + "A" * 30}}, 45)
+    new_kinds = [b["kind"] for b in edited["beats"]]
+    assert "title" in new_kinds and new_kinds.count("tool") == kinds.count("tool") - 1  # title cannot be dropped
+    ask = next(b for b in edited["beats"] if b["kind"] == "ask")
+    assert ask["caption"].startswith("Make it wrap.") and "A" * 30 not in ask["caption"]  # edited text is scrubbed
+    assert abs(edited["duration"] - 45) < 0.5 or all(b["duration"] >= cut.MAX_BEAT_S - 0.01 for b in edited["beats"])
+    same = storyboard.build(session, length_s=45)
+    assert cut.apply_edits(same, {"skip": [], "captions": {}}, 45)["duration"] == storyboard.build(session, length_s=45)["duration"]
