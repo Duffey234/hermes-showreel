@@ -63,10 +63,10 @@ sample session.
 
 | `narration` | What happens | Cost |
 |---|---|---|
-| `auto` (default) | Uses ElevenLabs if `ELEVENLABS_API_KEY` is set, otherwise captions only | your ElevenLabs plan |
-| `off` | Captions only | free |
+| `off` (default) | Captions only | free |
+| `auto` | A free offline voice if one is installed, otherwise captions only. Never a paid service | free |
 | `local` | Free offline voice: `piper` (set `piper_model`) or `espeak-ng`/`espeak` on PATH | free |
-| `elevenlabs` | Your own key, one request per narrated beat to `api.elevenlabs.io` | your ElevenLabs plan |
+| `elevenlabs` | Only when you choose it: your own key, one request per narrated beat to `api.elevenlabs.io` | your ElevenLabs plan |
 | `hermes` | Hermes's own `text_to_speech` tool, with whatever TTS you configured | depends on your TTS |
 
 Set the key through Hermes like any other provider key: use the masked field on the plugin's
@@ -82,7 +82,7 @@ Set these under `plugins.entries.showreel.settings`. Every one also appears on t
 Settings page.
 
 `capture` (true), `default_length` (45), `default_aspect` (16:9), `theme` (midnight|daylight),
-`narration` (auto), `elevenlabs_voice_id`, `elevenlabs_model`, `paid_narration_unattended`
+`narration` (off), `elevenlabs_voice_id`, `elevenlabs_model`, `paid_narration_unattended`
 (false), `local_voice` (en-us), `piper_model`, `redact_emails` (true), `keep_sessions` (30),
 `output_dir`, `ffmpeg_path`.
 
@@ -96,8 +96,9 @@ Settings page.
 * **Runs:** `ffmpeg` (and `ffprobe` when present) to encode. With `narration: local` it also runs
   `espeak-ng`/`espeak` or `piper`. All of these are subprocesses with fixed argument lists and no
   shell.
-* **Network:** none by default. Only with `narration: elevenlabs` (or `auto` with a key set) does
-  it make HTTPS POST requests to `api.elevenlabs.io`, carrying the caption text of each beat.
+* **Network:** none by default. Only when you explicitly set `narration: elevenlabs` (setting,
+  `--narration elevenlabs`, or the tool's `narration` argument) does it make HTTPS POST requests to
+  `api.elevenlabs.io`, carrying the caption text of each beat. Having the key set is not enough.
 * **No telemetry**, no background processes and no self-updates. Showreel never overrides a core
   tool and never bypasses approvals: it only observes hooks and does not block or alter tool
   calls.
@@ -111,5 +112,12 @@ python -m pytest -c tests/pytest.ini tests     # from a Hermes venv: unit, rende
 hermes plugins validate . --install-deps
 hermes plugins doctor . --ci
 ```
+
+Run pytest with the Python that has Hermes installed. Under any other Python, one test is skipped
+on purpose: `tests/test_hermes_load.py::test_real_discovery_and_core_hooks` ("Hermes not
+importable"). It loads the plugin through Hermes's real discovery in a scratch `HERMES_HOME` and
+drives a core `read_file` call so `post_tool_call` fires, so it needs Hermes itself. Two more tests
+skip only when no `espeak-ng`/`espeak` is on PATH (`tests/test_tts.py` local voice,
+`tests/test_render.py` narrated render), and the render tests skip without `ffmpeg`.
 
 MIT licensed.

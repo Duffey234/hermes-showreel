@@ -83,9 +83,9 @@ class Showreel:
             return False
 
     def narrator(self, override: Optional[str] = None) -> tts.Narrator:
-        engine = str(override or self.cfg("narration", "auto") or "auto")
+        engine = str(override or self.cfg("narration", "off") or "off")
         if engine not in tts.ENGINES:
-            engine = "auto"
+            engine = "off"
         n = tts.Narrator(
             engine, voice=str(self.cfg("elevenlabs_voice_id", "") or ""),
             model=str(self.cfg("elevenlabs_model", "") or ""),
@@ -139,7 +139,7 @@ class Showreel:
         lines = [
             f"Showreel capture: {'ON' if self.cfg('capture', True) else 'off'} · {len(sessions)} recorded session(s)",
             f"ffmpeg: {ff or 'NOT FOUND (install ffmpeg to render)'}",
-            f"narration: {self.cfg('narration', 'auto')} -> {n.describe()}",
+            f"narration: {self.cfg('narration', 'off')} -> {n.describe()}",
             f"offline voice: {local[0] + ' at ' + local[1] if local else 'none (install espeak-ng or piper)'}",
             f"renders go to: {self.out_dir()}",
         ]

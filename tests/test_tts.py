@@ -8,19 +8,27 @@ from hermes_showreel import tts
 SECRET = "".join(["sk_", "feedface" * 6])
 
 
-def test_auto_without_key_is_captions_only():
-    n = tts.Narrator("auto", secret_getter=lambda name: None)
-    assert n.engine == "off" and n.describe() == "captions only"
+def test_default_is_captions_only_even_with_a_key():
+    n = tts.Narrator(secret_getter=lambda name: SECRET)
+    assert n.requested == "off" and n.engine == "off" and n.describe() == "captions only"
 
 
-def test_auto_with_key_uses_elevenlabs_and_never_leaks_the_key(tmp_path):
+def test_auto_never_picks_a_paid_service(monkeypatch):
+    monkeypatch.setattr(tts, "local_backend", lambda piper_model="": None)
+    n = tts.Narrator("auto", secret_getter=lambda name: SECRET)
+    assert n.engine == "off"
+    monkeypatch.setattr(tts, "local_backend", lambda piper_model="": ("espeak", "/usr/bin/espeak-ng"))
+    assert tts.Narrator("auto", secret_getter=lambda name: SECRET).engine == "local"
+
+
+def test_explicit_elevenlabs_uses_the_key_and_never_leaks_it(tmp_path):
     seen = {}
 
     def http(url, body, headers, timeout):
         seen.update(url=url, body=body, headers=dict(headers))
         return b"ID3" + b"\x00" * 1024
 
-    n = tts.Narrator("auto", secret_getter=lambda name: SECRET if name == tts.ELEVEN_ENV else None, http=http)
+    n = tts.Narrator("elevenlabs", secret_getter=lambda name: SECRET if name == tts.ELEVEN_ENV else None, http=http)
     assert n.engine == "elevenlabs"
     out = n.say("Ran `pytest`", tmp_path / "b0")
     assert out and out.read_bytes().startswith(b"ID3")

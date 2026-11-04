@@ -3,7 +3,7 @@ version: "0.1.0"
 manifest_version: 2
 api_version: 1
 description: "Turn any Hermes session into a demo video under 90 seconds. Showreel records what the session actually did (your ask, terminal commands and output, file edits, screenshots, token usage), scrubs secrets before anything is stored or drawn, picks the key beats, and renders an MP4 with burned-in captions, an .srt and a poster, locally with Pillow and your ffmpeg. Optional narration: a free local voice, your own ElevenLabs key, or Hermes text_to_speech. Nothing is uploaded."
-author: Showreel contributors
+author: Tim Duffey (Duffey234)
 license: MIT
 homepage: https://github.com/Duffey234/hermes-showreel
 tags: ["video", "demo", "recap", "screen-recording", "captions", "tts", "devrel", "desktop"]
@@ -40,15 +40,15 @@ config_schema:
     label: "Theme"
   narration:
     type: str
-    choices: ["auto", "off", "local", "elevenlabs", "hermes"]
-    default: "auto"
+    choices: ["off", "auto", "local", "elevenlabs", "hermes"]
+    default: "off"
     label: "Narration"
-    description: "auto = ElevenLabs if your key is set, otherwise captions only. local = free offline voice (espeak-ng or piper on PATH). hermes = Hermes text_to_speech."
+    description: "off (default) = captions only. auto = free offline voice if one is installed, else captions only (never a paid service). local = free offline voice (espeak-ng or piper on PATH). elevenlabs = your own ElevenLabs key, only when you pick it. hermes = Hermes text_to_speech."
   elevenlabs_api_key:
     type: secret
     env: ELEVENLABS_API_KEY
     label: "ElevenLabs API key (optional)"
-    description: "Your own key, stored by Hermes like other provider keys. Used only for narration calls to api.elevenlabs.io."
+    description: "Your own key, stored by Hermes like other provider keys. Used only when Narration is set to elevenlabs, for calls to api.elevenlabs.io."
   elevenlabs_voice_id:
     type: str
     default: ""

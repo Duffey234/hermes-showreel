@@ -1,11 +1,11 @@
-"""Narration engines. Pluggable; the default with no key is captions only.
+"""Narration engines. Pluggable; the default is ``off`` (captions only).
 
-* ``off``        – captions only, no audio.
-* ``auto``       – ElevenLabs when ``ELEVENLABS_API_KEY`` is set through Hermes's credential route
-                   (``hermes config set`` / Desktop secret field / .env), else captions only.
+* ``off``        – the default: captions only, no audio.
+* ``auto``       – a free offline voice when one is installed, else captions only. Never a paid service.
 * ``local``      – free offline voice: ``piper`` (with a configured voice model) or ``espeak-ng`` /
                    ``espeak`` found on PATH. Nothing is downloaded or bundled.
-* ``elevenlabs`` – the user's own ElevenLabs key, read with ``agent.secret_scope.get_secret``.
+* ``elevenlabs`` – only when explicitly chosen: the user's own ElevenLabs key (``ELEVENLABS_API_KEY``),
+                   read with ``agent.secret_scope.get_secret``.
                    One HTTPS POST per narrated beat to api.elevenlabs.io (bills the user's account).
 * ``hermes``     – Hermes's own ``text_to_speech`` tool with whatever TTS the user configured.
 
@@ -61,7 +61,7 @@ def local_backend(piper_model: str = "") -> Optional[tuple[str, str]]:
 
 
 class Narrator:
-    def __init__(self, engine: str = "auto", *, voice: str = "", model: str = "", local_voice: str = "en-us",
+    def __init__(self, engine: str = "off", *, voice: str = "", model: str = "", local_voice: str = "en-us",
                  piper_model: str = "", secret_getter: Callable[[str], Optional[str]] = _get_secret,
                  http: Optional[Callable[..., bytes]] = None, dispatch_tool: Optional[Callable[..., str]] = None,
                  fallback_local: bool = True):
@@ -81,8 +81,8 @@ class Narrator:
         self.chars_sent = 0
 
     def _resolve(self, engine: str) -> str:
-        if engine == "auto":
-            return "elevenlabs" if self._has_key() else "off"
+        if engine == "auto":  # free voices only; a paid service is never picked implicitly
+            return "local" if local_backend(self.piper_model) else "off"
         if engine == "local" and not local_backend(self.piper_model):
             return "off"
         return engine

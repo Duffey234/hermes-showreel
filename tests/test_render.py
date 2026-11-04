@@ -54,6 +54,18 @@ def test_missing_ffmpeg_fails_cleanly(app, monkeypatch):
     assert res["success"] is False and "ffmpeg not found" in res["error"]
 
 
+def test_app_default_narration_is_off(tmp_path, store):
+    class Ctx:
+        def get_config(self, key, default=None):
+            return default
+
+        def current_cron_execution(self):
+            return None
+
+    n = Showreel(Ctx(), store=store).narrator()
+    assert n.requested == "off" and n.engine == "off"
+
+
 def test_no_session_message(app):
     res = app.render_session("")
     assert res["success"] is False and "No recorded session" in res["error"]
