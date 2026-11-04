@@ -209,6 +209,8 @@ def format_result(res: dict) -> str:
         f"video: {res['file_path']}",
         f"captions: {res['srt_path']}",
     ]
+    if res.get("elevenlabs_characters"):
+        lines.append(f"ElevenLabs characters used: {res['elevenlabs_characters']} (billed to your ElevenLabs account)")
     for n in res.get("notes") or []:
         lines.append(f"note: {n}")
     lines.append(res["media_tag"])
