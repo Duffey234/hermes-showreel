@@ -99,3 +99,9 @@ def test_reclaim_wins_back_time_when_the_voice_runs_long():
     # nothing to give: stays as is
     board2 = {"beats": [{"kind": "ask", "duration": 5.0}]}
     assert cutmod._reclaim(board2, [5.0], 3.0) == 0.0
+
+
+def test_spoken_reads_paths_as_file_names():
+    s = cut._spoken("`cd /workspace/demo && python -m py_compile snake.py && echo ok` in /workspace/demo/mathutil.py")
+    assert "/" not in s and "cd " not in s
+    assert "snake.py, then echo ok" in s and "mathutil.py" in s

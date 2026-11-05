@@ -43,3 +43,20 @@ def test_failure_and_fix_are_kept_together(store):
         fails = sum(1 for x in storyboard.build(s, length_s=L)["beats"]
                     if x["kind"] == "terminal" and "failed" in x["caption"])
         assert (fails > 0) == ("fix" in kinds), (L, kinds)
+
+
+def test_a_trailing_render_turn_is_not_part_of_the_story():
+    from hermes_showreel import storyboard as sb
+    ev = lambda kind, ts, **data: {"kind": kind, "ts": ts, "tool": data.pop("tool", None), "data": data}
+    events = [ev("ask", 0, text="Fix the failing test."),
+              ev("tool", 1, tool="terminal", args={"command": "cd /w && python -m pytest -q"}, ok=False, output="1 failed"),
+              ev("tool", 2, tool="terminal", args={"command": "cd /w && python -m pytest -q"}, ok=True, output="1 passed"),
+              ev("reply", 3, text="The test passes now."),
+              ev("ask", 4, text="Now call showreel_render."),
+              ev("reply", 5, text="MEDIA:/home/x/renders/showreel-fix-16x9.mp4")]
+    board = sb.build({"events": events}, length_s=30)
+    res = [b for b in board["beats"] if b["kind"] == "result"]
+    assert res and res[0]["caption"] == "The test passes now."
+    assert board["stats"]["wall_seconds"] == 3
+    caps = " ".join(b["caption"] for b in board["beats"])
+    assert "MEDIA:" not in caps and "cd /w" not in caps and "`python -m pytest -q` failed" in caps

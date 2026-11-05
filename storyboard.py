@@ -55,6 +55,30 @@ def _headline(text: str, n: int = 60) -> str:
     return _short(first, n).rstrip(".!")
 
 
+def _is_render_turn(turn: list) -> bool:
+    """A turn that only asked Showreel for a video: no work tools, and a showreel call or MEDIA reply."""
+    tools = [e for e in turn if e["kind"] == "tool"]
+    if any((e.get("tool") or "") != "showreel_render" for e in tools):
+        return False
+    return bool(tools) or any(e["kind"] == "reply" and "MEDIA:" in str(e["data"].get("text", "")) and
+                              "showreel-" in str(e["data"].get("text", "")) for e in turn)
+
+
+def _before_showreel(events: list) -> list:
+    """The session as it was before Showreel was asked to cut it: trailing turns that only rendered
+    a video (the ask, the showreel_render call and its MEDIA reply) are not part of the story."""
+    while True:
+        starts = [i for i, e in enumerate(events) if e["kind"] == "ask"]
+        if len(starts) < 2 or not _is_render_turn(events[starts[-1]:]):
+            return events
+        events = events[:starts[-1]]
+
+
+def _show_cmd(cmd: str) -> str:
+    """A command as captioned: a leading ``cd <dir> &&`` is dropped (the terminal window still shows it)."""
+    return re.sub(r"^cd\s+\S+\s*&&\s*", "", cmd.strip())
+
+
 def _cmd_of(args: dict) -> str:
     for k in ("command", "cmd", "code", "script"):
         v = args.get(k)
@@ -107,7 +131,7 @@ def _is_test(cmd: str) -> bool:
 def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None) -> dict:
     """Return ``{"beats": [...], "duration": s, "stats": {...}}`` for *session* (from ``Store.get_session``)."""
     target = max(MIN_LEN_S, min(float(length_s or 45.0), HARD_CAP_S))
-    events = session.get("events") or []
+    events = _before_showreel(session.get("events") or [])
     asks = [e for e in events if e["kind"] == "ask"]
     replies = [e for e in events if e["kind"] == "reply"]
     tools = [e for e in events if e["kind"] == "tool"]
@@ -159,16 +183,16 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
             if not ok:
                 score += 1.0
                 last_fail_idx[key] = len(middle)
-                cap = f"`{_short(cmd, 48)}` failed"
+                cap = f"`{_short(_show_cmd(cmd), 48)}` failed"
             elif key in last_fail_idx:
                 score += 4.0
                 kind = "fix"
-                cap = f"Fixed. `{_short(cmd, 40)}` passes now"
+                cap = f"Fixed. `{_short(_show_cmd(cmd), 40)}` passes now"
                 prev = middle[last_fail_idx.pop(key)]
                 prev.score += 2.5  # the failure is part of the story
                 fix_pairs.append((prev, None))  # completed below once the fix beat exists
             else:
-                cap = f"Ran `{_short(cmd, 52)}`"
+                cap = f"Ran `{_short(_show_cmd(cmd), 52)}`"
             body = {"command": cmd, "output": out, "ok": ok, "exit_code": d.get("exit_code")}
             middle.append(Beat(kind, "Terminal" if kind != "fix" else "Fixed", cap, body, score + novelty, i))
             if kind == "fix":

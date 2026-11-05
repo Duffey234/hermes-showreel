@@ -29,6 +29,9 @@ def _sentences(text: str, min_words: int = 4) -> str:
 def _spoken(text: str) -> str:
     """Caption text cleaned for a voice: no markdown ticks, separators read as pauses."""
     t = text.replace("`", "")
+    t = re.sub(r"\bcd\s+\S+\s*&&\s*", "", t)  # "cd /some/dir && pytest" is read as "pytest"
+    t = re.sub(r"(?<![\w.])(?:~|\.{1,2})?(?:/[\w.\-]+)+/?", lambda m: m.group(0).rstrip("/").rsplit("/", 1)[-1], t)
+    t = re.sub(r"\s*&&\s*", ", then ", t)
     t = re.sub(r"\s*\(\+\d+ / -\d+\)", "", t)
     t = re.sub(r"\s+[\u00b7|]\s+", ", ", t)
     t = re.sub(r"\s{2,}", " ", t).strip()
