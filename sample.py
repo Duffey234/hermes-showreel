@@ -24,7 +24,7 @@ def record_sample(recorder: Recorder, session_id: str = "") -> str:
     recorder.on_session_start(session_id=sid, model="hermes-demo", platform="cli")
     recorder.pre_llm_call(session_id=sid, is_first_turn=True, model="hermes-demo", platform="cli",
                           user_message="Build a tiny snake game in Python and fix whatever breaks. "
-                                       f"My key is OPENAI_API_KEY={_fake_key()} if you need it.")
+                                       f"My key is API_KEY={_fake_key()} if you need it.")
     recorder.post_tool_call(session_id=sid, task_id=sid, tool_name="terminal", duration_ms=420,
                             args={"command": "ls snake/"},
                             result=json.dumps({"output": "game.py\ntest_game.py\nREADME.md", "exit_code": 0}))

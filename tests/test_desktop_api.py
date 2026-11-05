@@ -49,6 +49,13 @@ def test_status_sessions_plan_render_media(client, app):
     assert res["name"] in names
     media = client.get(f"/api/plugins/showreel/media?name={res['name']}").json()
     assert media["url"].startswith("data:video/mp4;base64,")
+    # absolute paths stay on the server: the Desktop only ever sees bare file names
+    import json as _json
+    listing = client.get("/api/plugins/showreel/renders").json()
+    for blob in (res, listing, {k: v for k, v in media.items() if k != "url"}):
+        text = _json.dumps(blob)
+        assert str(app.out_dir()) not in text and "_path" not in text, text[:300]
+    assert res["srt_name"].endswith(".srt") and res["poster_name"].endswith(".png")
 
 
 def test_media_refuses_paths_outside_renders(client):

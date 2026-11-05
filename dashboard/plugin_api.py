@@ -61,9 +61,19 @@ async def render(body: dict):
     res = await asyncio.to_thread(
         _app().render_session, str(body.get("session_id") or ""), length=body.get("length") or None,
         aspect=body.get("aspect") or None, title=body.get("title") or None, narration=narration, edits=edits)
-    if res.get("success"):
-        res["name"] = Path(res["file_path"]).name
-    return res
+    return _bare(res)
+
+
+def _bare(res: dict) -> dict:
+    """The Desktop only needs file names; absolute paths stay on the server."""
+    out = dict(res)
+    out.pop("media_tag", None)  # the chat MEDIA: tag carries the absolute path; the page does not need it
+    for key in ("file_path", "srt_path", "poster_path"):
+        if out.get(key):
+            out[key.replace("_path", "_name") if key != "file_path" else "name"] = Path(out.pop(key)).name
+        else:
+            out.pop(key, None)
+    return out
 
 
 @router.get("/renders")
@@ -82,4 +92,4 @@ async def media(name: str):
         raise HTTPException(413, "render too large to preview inline; open the file instead")
     data = await asyncio.to_thread(f.read_bytes)
     mime = "video/mp4" if f.suffix == ".mp4" else "image/png"
-    return {"name": f.name, "path": str(f), "url": f"data:{mime};base64," + base64.b64encode(data).decode("ascii")}
+    return {"name": f.name, "url": f"data:{mime};base64," + base64.b64encode(data).decode("ascii")}

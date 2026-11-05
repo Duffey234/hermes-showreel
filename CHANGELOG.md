@@ -15,5 +15,7 @@
   no duplicate caption bars on cards, clean captions, plurals, wrapped output in 9:16.
 - If a voice clip runs longer than estimated, the time is won back from beats with slack, so the
   cut still lands on the requested length. Chat bubbles drop markdown ticks and bold markers.
+- Desktop routes return bare file names only (no absolute paths in /render, /renders, /media).
+- Outro card shows the install-from-GitHub command; the sample session's fake key is a generic `API_KEY`.
 - Default narration is `off`; `auto` uses only free offline voices; ElevenLabs only when chosen.
 - `/showreel`, `showreel_render` tool, `hermes showreel` CLI, built-in demo session.

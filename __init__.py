@@ -187,7 +187,7 @@ class Showreel:
                     meta = json.loads(side.read_text(encoding="utf-8")).get("result") or {}
                 except (OSError, ValueError):
                     meta = {}
-            rows.append({"name": mp4.name, "path": str(mp4), "bytes": mp4.stat().st_size,
+            rows.append({"name": mp4.name, "bytes": mp4.stat().st_size,
                          "mtime": mp4.stat().st_mtime, "duration_s": meta.get("duration_s"),
                          "aspect": meta.get("aspect"), "narration": meta.get("narration"),
                          "session_id": meta.get("session_id"),

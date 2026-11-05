@@ -26,6 +26,7 @@ SIZES_1080 = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080)}
 RESOLUTIONS = ("1080p", "720p")
 # Beats whose card already shows the caption text in full: no second copy in the caption bar
 # (the .srt still carries every caption).
+INSTALL_CMD = "hermes plugins install https://github.com/Duffey234/hermes-showreel"
 NO_CAPTION_BAR = ("title", "ask", "result", "outro", "stats")
 FADE_FRAMES = 7
 
@@ -505,8 +506,12 @@ class Renderer:
         for i, l in enumerate(wrap(d, sub, fs, self.W - self.s(140), 2)):
             d.text(((self.W - d.textlength(l, font=fs)) / 2, y + self.s(108) + i * self.s(36)), l, font=fs,
                    fill=c["text"])
-        fm = font("mono", self.s(22))
-        cmd = "hermes plugins install showreel"
+        cmd = INSTALL_CMD
+        size = 22
+        fm = font("mono", self.s(size))
+        while size > 12 and d.textlength(cmd, font=fm) + self.s(40) > self.W - self.s(60):
+            size -= 1
+            fm = font("mono", self.s(size))
         w = d.textlength(cmd, font=fm) + self.s(40)
         bx = (self.W - w) / 2
         by = y + self.s(200)

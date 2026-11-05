@@ -49,7 +49,7 @@ def test_real_discovery_and_core_hooks(tmp_path):
                     ignore=shutil.ignore_patterns("tests", ".git", "__pycache__", ".pytest_cache"))
     (home / "config.yaml").write_text("plugins:\n  enabled:\n    - showreel\n", encoding="utf-8")
     notes = tmp_path / "notes.txt"
-    notes.write_text("OPENAI_API_KEY=" + "sk-" + "itest" * 6 + "\nhello\n", encoding="utf-8")
+    notes.write_text("API_KEY=" + "sk-" + "itest" * 6 + "\nhello\n", encoding="utf-8")
     env = dict(os.environ, HERMES_HOME=str(home))
     r = subprocess.run([sys.executable, "-c", SCRIPT, str(notes)], capture_output=True, text=True, env=env,
                        timeout=240, cwd=str(tmp_path))
