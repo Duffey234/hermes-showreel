@@ -95,6 +95,24 @@ def _path_of(args: dict) -> str:
     return ""
 
 
+def _diff_counts(args: dict) -> tuple[int, int]:
+    """(added, removed) line counts for an edit call, from the whole edit (not the shown excerpt)."""
+    for k in ("patch", "diff"):
+        v = args.get(k)
+        if isinstance(v, str) and v.strip():
+            ls = v.splitlines()
+            return (sum(1 for l in ls if l.startswith("+") and not l.startswith("+++")),
+                    sum(1 for l in ls if l.startswith("-") and not l.startswith("---")))
+    old = args.get("old_string") or args.get("old_str") or args.get("old") or args.get("search")
+    new = args.get("new_string") or args.get("new_str") or args.get("new") or args.get("replace")
+    if isinstance(old, str) or isinstance(new, str):
+        return len((new or "").splitlines()), len((old or "").splitlines())
+    content = args.get("content") or args.get("text")
+    if isinstance(content, str):
+        return len(content.splitlines()), 0
+    return 0, 0
+
+
 def _diff_lines(args: dict) -> list[str]:
     """Best-effort +/- lines for an edit tool call."""
     for k in ("patch", "diff"):
@@ -200,8 +218,7 @@ def build(session: dict, *, length_s: float = 45.0, title: Optional[str] = None)
         elif name in EDIT_TOOLS:
             path = _path_of(args)
             lines = _diff_lines(args)
-            adds = sum(1 for l in lines if l.startswith("+"))
-            dels = sum(1 for l in lines if l.startswith("-"))
+            adds, dels = _diff_counts(args)
             cap = f"Edited {os.path.basename(path) or 'a file'}  (+{adds} / -{dels})"
             middle.append(Beat("diff", "Edit", cap, {"path": path, "lines": lines, "ok": ok}, 4.0 + novelty, i))
         elif d.get("images"):

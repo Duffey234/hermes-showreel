@@ -60,3 +60,10 @@ def test_a_trailing_render_turn_is_not_part_of_the_story():
     assert board["stats"]["wall_seconds"] == 3
     caps = " ".join(b["caption"] for b in board["beats"])
     assert "MEDIA:" not in caps and "cd /w" not in caps and "`python -m pytest -q` failed" in caps
+
+
+def test_edit_counts_cover_the_whole_file_not_the_excerpt():
+    from hermes_showreel import storyboard as sb
+    content = "\n".join(f"line {i}" for i in range(57))
+    assert sb._diff_counts({"content": content}) == (57, 0)
+    assert len(sb._diff_lines({"content": content})) == 30
